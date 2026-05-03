@@ -7,3 +7,4 @@ __pycache__/
 node_modules/
 infra/dist/
 infra/cdk.out/
+frontend/dist/
