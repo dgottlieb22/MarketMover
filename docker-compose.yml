@@ -1,0 +1,25 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: market_data
+      POSTGRES_USER: mmd
+      POSTGRES_PASSWORD: mmd_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      MMD_DATABASE_URL: postgresql://mmd:mmd_dev@db:5432/market_data
+      MMD_PROVIDER: mock
+    depends_on:
+      - db
+    command: uvicorn app.api.app:app --host 0.0.0.0 --port 8000
+
+volumes:
+  pgdata:
