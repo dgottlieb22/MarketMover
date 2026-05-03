@@ -32,7 +32,7 @@ def get_alerts(
     limit: int = Query(default=50, le=200),
     session: Session = Depends(get_session_dep),
 ):
-    query = session.query(MovementAlert).order_by(MovementAlert.created_at.desc())
+    query = session.query(MovementAlert).order_by(MovementAlert.timestamp.desc(), MovementAlert.score.desc())
     if severity:
         query = query.filter(MovementAlert.severity == severity)
     return [_alert_to_dict(a) for a in query.limit(limit).all()]
