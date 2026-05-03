@@ -12,6 +12,15 @@ interface Alert {
   explanation: string
 }
 
+const PRESETS: Record<string, string> = {
+  'Mag 7': 'AAPL,MSFT,GOOGL,AMZN,NVDA,META,TSLA',
+  'Tech 20': 'AAPL,MSFT,GOOGL,AMZN,NVDA,META,TSLA,AMD,CRM,ORCL,ADBE,QCOM,AVGO,INTC,MU,AMAT,NFLX,SNPS,CDNS,TXN',
+  'Meme': 'GME,AMC,BBBY,PLTR,SOFI,HOOD,COIN,MARA,RIOT,LCID',
+  'Fintech': 'SQ,PYPL,COIN,HOOD,SOFI,AFRM,NU,MELI,GRAB,SE',
+  'Cyber': 'CRWD,PANW,ZS,FTNT,NET,S,OKTA,CYBR,TENB,QLYS',
+  'Semis': 'NVDA,AMD,INTC,AVGO,QCOM,TXN,MU,AMAT,LRCX,KLAC,MRVL,ON,ADI,NXPI,MCHP',
+}
+
 export default function Dashboard() {
   const [tickers, setTickers] = useState('AAPL,TSLA,NVDA,GME,AMD')
   const [days, setDays] = useState(120)
@@ -57,6 +66,17 @@ export default function Dashboard() {
             style={{ width: '300px' }}
             placeholder='AAPL,TSLA,NVDA'
           />
+        </div>
+        <div className='form-row'>
+          {Object.entries(PRESETS).map(([name, list]) => (
+            <button
+              key={name}
+              className={`filter-btn ${tickers === list ? 'active' : ''}`}
+              onClick={() => setTickers(list)}
+            >
+              {name} ({list.split(',').length})
+            </button>
+          ))}
         </div>
         <div className='form-row'>
           <label>Days:</label>

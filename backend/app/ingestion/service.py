@@ -35,10 +35,16 @@ class IngestionService:
         session.commit()
 
         errors: list[str] = []
+        try:
+            batch = self.provider.get_bars_batch(tickers, start_time, end_time, interval)
+        except Exception as exc:
+            errors.append(f"batch: {exc}")
+            batch = {}
+
+        now = datetime.now(UTC)
         for ticker in tickers:
             try:
-                bars = self.provider.get_bars(ticker, start_time, end_time, interval)
-                now = datetime.now(UTC)
+                bars = batch.get(ticker, [])
                 for bar in bars:
                     session.merge(MarketBar(
                         ticker=bar.ticker,

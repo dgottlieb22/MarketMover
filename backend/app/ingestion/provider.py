@@ -20,3 +20,9 @@ class MarketDataProvider(ABC):
     def get_bars(
         self, ticker: str, start_time: datetime, end_time: datetime, interval: str
     ) -> list[Bar]: ...
+
+    def get_bars_batch(
+        self, tickers: list[str], start_time: datetime, end_time: datetime, interval: str
+    ) -> dict[str, list[Bar]]:
+        """Fetch bars for multiple tickers. Default: call get_bars per ticker."""
+        return {t: self.get_bars(t, start_time, end_time, interval) for t in tickers}
