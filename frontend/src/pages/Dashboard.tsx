@@ -23,9 +23,13 @@ const PRESETS: Record<string, string> = {
 }
 
 export default function Dashboard() {
-  const [tickers, setTickers] = useState('AAPL,TSLA,NVDA,GME,AMD')
-  const [days, setDays] = useState(120)
-  const [provider, setProvider] = useState('yahoo')
+  const [tickers, setTickers] = useState(() => localStorage.getItem('mmd_tickers') ?? 'AAPL,TSLA,NVDA,GME,AMD')
+  const [days, setDays] = useState(() => Number(localStorage.getItem('mmd_days')) || 120)
+  const [provider, setProvider] = useState(() => localStorage.getItem('mmd_provider') ?? 'yahoo')
+
+  useEffect(() => { localStorage.setItem('mmd_tickers', tickers) }, [tickers])
+  useEffect(() => { localStorage.setItem('mmd_days', String(days)) }, [days])
+  useEffect(() => { localStorage.setItem('mmd_provider', provider) }, [provider])
   const [running, setRunning] = useState(false)
   const [runResult, setRunResult] = useState<any>(null)
   const [alerts, setAlerts] = useState<Alert[]>([])
