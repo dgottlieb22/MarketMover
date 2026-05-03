@@ -98,13 +98,14 @@ export default function Dashboard() {
             </button>
           ))}
           <span style={{ borderLeft: '1px solid #2d333b', margin: '0 0.25rem' }} />
+          <label style={{ fontSize: '0.8rem', color: '#8b949e' }}>Show:</label>
           {[10, 25, 50, 100].map(n => (
             <button
               key={n}
               className={`filter-btn ${limit === n ? 'active' : ''}`}
               onClick={() => setLimit(n)}
             >
-              {n}
+              {limit === n ? `Show ${n}` : n}
             </button>
           ))}
         </div>
