@@ -10,8 +10,12 @@ dependencies = [
     "pydantic>=2.11",
     "pydantic-settings>=2.9",
     "numpy>=2.2.1",
+    "yfinance>=0.2.40",
     "pytest>=8.3.4",
 ]
+
+[project.scripts]
+mmd = "app.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
