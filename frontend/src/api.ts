@@ -8,11 +8,11 @@ async function handleResponse(res: Response) {
   return res.json()
 }
 
-export async function runPipeline(tickers: string, days: number, provider: string) {
+export async function runPipeline(tickers: string, days: number, provider: string, overrides?: Record<string, number>) {
   const res = await fetch(`${BASE}/run`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tickers, days, provider }),
+    body: JSON.stringify({ tickers, days, provider, ...overrides }),
   })
   return handleResponse(res)
 }

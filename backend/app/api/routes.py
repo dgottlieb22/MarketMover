@@ -54,6 +54,13 @@ def get_ticker_signals(ticker: str, session: Session = Depends(get_session_dep))
 @router.post("/run")
 def run_pipeline(request: dict):
     settings = get_settings()
+
+    # Allow UI to override detection thresholds
+    for key in ['price_zscore_threshold', 'volume_ratio_threshold', 'combined_zscore_threshold',
+                'combined_volume_threshold', 'severity_low', 'severity_medium', 'severity_high']:
+        if key in request:
+            setattr(settings, key, float(request[key]))
+
     engine = get_engine(settings.database_url)
     init_db(engine)
     factory = get_session_factory(engine)

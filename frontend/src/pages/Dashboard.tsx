@@ -35,6 +35,14 @@ export default function Dashboard() {
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [filter, setFilter] = useState<string | null>(null)
   const [limit, setLimit] = useState(25)
+  const [showTuning, setShowTuning] = useState(false)
+  const [tuning, setTuning] = useState({
+    price_zscore_threshold: 2.5,
+    volume_ratio_threshold: 3.0,
+    combined_zscore_threshold: 2.0,
+    combined_volume_threshold: 2.0,
+  })
+  const setTune = (k: string, v: number) => setTuning(t => ({ ...t, [k]: v }))
 
   const loadAlerts = async () => {
     const data = await getAlerts(filter ?? undefined, limit)
@@ -47,7 +55,7 @@ export default function Dashboard() {
     setRunning(true)
     setRunResult(null)
     try {
-      const result = await runPipeline(tickers, days, provider)
+      const result = await runPipeline(tickers, days, provider, tuning)
       setRunResult(result)
       await loadAlerts()
     } catch (e: any) {
@@ -113,7 +121,30 @@ export default function Dashboard() {
           <button onClick={handleRun} disabled={running}>
             {running ? 'Running...' : 'Run Pipeline'}
           </button>
+          <button className='filter-btn' onClick={() => setShowTuning(!showTuning)}>
+            {showTuning ? 'Hide Tuning' : 'Tuning ⚙'}
+          </button>
         </div>
+        {showTuning && (
+          <div style={{ background: '#0d1117', borderRadius: '6px', padding: '0.75rem', marginBottom: '0.5rem' }}>
+            {([
+              ['price_zscore_threshold', 'Price Z-Score ≥', 1, 5, 0.1],
+              ['volume_ratio_threshold', 'Volume Ratio ≥', 1, 10, 0.5],
+              ['combined_zscore_threshold', 'Combined Z-Score ≥', 1, 5, 0.1],
+              ['combined_volume_threshold', 'Combined Volume ≥', 1, 5, 0.5],
+            ] as [string, string, number, number, number][]).map(([key, label, min, max, step]) => (
+              <div key={key} className='form-row' style={{ marginBottom: '0.25rem' }}>
+                <label style={{ width: '160px', fontSize: '0.8rem', color: '#8b949e' }}>{label}</label>
+                <input type='range' min={min} max={max} step={step}
+                  value={tuning[key as keyof typeof tuning]}
+                  onChange={e => setTune(key, Number(e.target.value))}
+                  style={{ width: '200px' }}
+                />
+                <span style={{ fontSize: '0.85rem', width: '40px' }}>{tuning[key as keyof typeof tuning]}</span>
+              </div>
+            ))}
+          </div>
+        )}
         {running && <div className='status loading'>Fetching data and running detection...</div>}
         {runResult && !runResult.error && (
           <div className='status success'>
