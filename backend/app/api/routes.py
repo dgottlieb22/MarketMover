@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -6,7 +7,10 @@ from sqlalchemy.orm import Session
 from app.backtesting.service import BacktestService
 from app.config import get_settings
 from app.db.models import MarketBar, MarketFeature, MovementAlert
-from app.db.session import get_engine, get_session_factory
+from app.db.session import get_engine, get_session_factory, init_db
+from app.detection.engine import DetectionEngine
+from app.features.service import FeatureService
+from app.ingestion.service import IngestionService
 
 router = APIRouter()
 
@@ -44,6 +48,60 @@ def get_ticker_signals(ticker: str, session: Session = Depends(get_session_dep))
         "alerts": [_alert_to_dict(a) for a in alerts],
         "features": [_feature_to_dict(f) for f in features],
         "bars": [_bar_to_dict(b) for b in bars],
+    }
+
+
+@router.post("/run")
+def run_pipeline(request: dict):
+    settings = get_settings()
+    engine = get_engine(settings.database_url)
+    init_db(engine)
+    factory = get_session_factory(engine)
+
+    tickers = [t.strip().upper() for t in request.get("tickers", "AAPL,TSLA,NVDA").split(",")]
+    days = request.get("days", 120)
+    provider_name = request.get("provider", "yahoo")
+
+    if provider_name == "yahoo":
+        from app.ingestion.yahoo_provider import YahooFinanceProvider
+        provider = YahooFinanceProvider()
+    else:
+        from app.ingestion.mock_provider import MockProvider
+        provider = MockProvider()
+
+    end = datetime.now()
+    start = end - timedelta(days=days)
+
+    # Clear old data for these tickers to prevent mixed-provider contamination
+    with factory() as session:
+        for model in [MovementAlert, MarketFeature, MarketBar]:
+            session.query(model).filter(model.ticker.in_(tickers)).delete(synchronize_session=False)
+        session.commit()
+
+    svc = IngestionService(factory, provider)
+    svc.ingest(tickers, start, end)
+
+    feat_svc = FeatureService(factory, settings)
+    det = DetectionEngine(factory, settings)
+    all_alerts = []
+    for t in tickers:
+        feat_svc.compute_features(t)
+        all_alerts.extend(det.detect(t))
+
+    with factory() as session:
+        bars_count = session.query(MarketBar).filter(
+            MarketBar.ticker.in_(tickers)
+        ).count()
+
+    return {
+        "status": "success",
+        "tickers": tickers,
+        "bars_ingested": bars_count,
+        "alerts_generated": len(all_alerts),
+        "alerts_by_severity": {
+            s: len([a for a in all_alerts if a.severity == s])
+            for s in ["high", "medium", "low"]
+        },
     }
 
 
