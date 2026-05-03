@@ -51,6 +51,60 @@ def get_ticker_signals(ticker: str, session: Session = Depends(get_session_dep))
     }
 
 
+SECTOR_MAP: dict[str, str] = {
+    "AAPL": "XLK", "MSFT": "XLK", "GOOGL": "XLK", "META": "XLK", "CRM": "XLK",
+    "ORCL": "XLK", "ADBE": "XLK", "INTC": "XLK", "CSCO": "XLK",
+    "NVDA": "SMH", "AMD": "SMH", "AVGO": "SMH", "QCOM": "SMH", "TXN": "SMH",
+    "MU": "SMH", "AMAT": "SMH", "LRCX": "SMH", "KLAC": "SMH", "MRVL": "SMH",
+    "ARM": "SMH", "SMCI": "SMH", "ON": "SMH", "ADI": "SMH", "NXPI": "SMH",
+    "TSLA": "QQQ", "AMZN": "QQQ", "NFLX": "QQQ",
+    "JPM": "XLF", "GS": "XLF", "MS": "XLF", "BAC": "XLF", "WFC": "XLF",
+    "V": "XLF", "MA": "XLF", "BLK": "XLF", "SCHW": "XLF", "AXP": "XLF",
+    "XOM": "XLE", "CVX": "XLE", "COP": "XLE", "SLB": "XLE", "OXY": "XLE",
+    "UNH": "XLV", "JNJ": "XLV", "PFE": "XLV", "MRK": "XLV", "LLY": "XLV",
+    "CRWD": "HACK", "PANW": "HACK", "ZS": "HACK", "FTNT": "HACK", "NET": "HACK",
+    "GME": "IWM", "AMC": "IWM", "PLTR": "QQQ", "COIN": "QQQ", "HOOD": "QQQ",
+}
+
+
+@router.get("/tickers/{ticker}/benchmark")
+def get_benchmark(ticker: str, session: Session = Depends(get_session_dep)):
+    """Return benchmark ETF returns alongside ticker returns for comparison."""
+    benchmark = SECTOR_MAP.get(ticker.upper(), "SPY")
+    bars = session.query(MarketBar).filter(
+        MarketBar.ticker == ticker
+    ).order_by(MarketBar.timestamp).all()
+
+    if len(bars) < 2:
+        return {"ticker": ticker, "benchmark": benchmark, "comparisons": []}
+
+    # Fetch benchmark bars from Yahoo on-demand
+    from app.ingestion.yahoo_provider import YahooFinanceProvider
+    provider = YahooFinanceProvider()
+    bench_bars = provider.get_bars(benchmark, bars[0].timestamp, bars[-1].timestamp, "1d")
+    bench_by_date = {b.timestamp.date(): b for b in bench_bars}
+
+    comparisons = []
+    for i in range(1, len(bars)):
+        prev, cur = bars[i - 1], bars[i]
+        ret = (cur.close - prev.close) / prev.close
+        d = cur.timestamp.date()
+        bench_bar = bench_by_date.get(d)
+        prev_date = prev.timestamp.date()
+        bench_prev = bench_by_date.get(prev_date)
+        bench_ret = None
+        if bench_bar and bench_prev and bench_prev.close:
+            bench_ret = (bench_bar.close - bench_prev.close) / bench_prev.close
+        comparisons.append({
+            "date": d.isoformat(),
+            "ticker_return": round(ret * 100, 2),
+            "benchmark_return": round(bench_ret * 100, 2) if bench_ret is not None else None,
+            "relative": round((ret - (bench_ret or 0)) * 100, 2),
+        })
+
+    return {"ticker": ticker, "benchmark": benchmark, "comparisons": comparisons}
+
+
 COMMON_TICKERS = [
     "AAPL","MSFT","GOOGL","AMZN","NVDA","META","TSLA","AMD","CRM","ORCL",
     "ADBE","QCOM","AVGO","INTC","MU","AMAT","NFLX","SNPS","CDNS","TXN",

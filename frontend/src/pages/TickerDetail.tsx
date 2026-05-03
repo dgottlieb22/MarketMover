@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { getTickerSignals } from '../api'
+import { getTickerSignals, getBenchmark } from '../api'
 
 function PriceChart({ bars, alertDates }: { bars: any[]; alertDates: Set<string> }) {
   const W = 900, H = 200, PAD = 40
@@ -53,9 +53,13 @@ function PriceChart({ bars, alertDates }: { bars: any[]; alertDates: Set<string>
 export default function TickerDetail() {
   const { ticker } = useParams<{ ticker: string }>()
   const [data, setData] = useState<any>(null)
+  const [bench, setBench] = useState<any>(null)
 
   useEffect(() => {
-    if (ticker) getTickerSignals(ticker).then(setData)
+    if (ticker) {
+      getTickerSignals(ticker).then(setData)
+      getBenchmark(ticker).then(setBench).catch(() => {})
+    }
   }, [ticker])
 
   if (!data) return <p>Loading...</p>
@@ -70,6 +74,33 @@ export default function TickerDetail() {
       <h1>{ticker} Signals</h1>
 
       {bars.length > 1 && <PriceChart bars={bars} alertDates={alertDates} />}
+
+      {bench?.comparisons?.length > 0 && (
+        <div className='card'>
+          <h2>vs {bench.benchmark} (last 10 days)</h2>
+          <table>
+            <thead>
+              <tr><th>Date</th><th>{ticker}</th><th>{bench.benchmark}</th><th>Relative</th></tr>
+            </thead>
+            <tbody>
+              {bench.comparisons.slice(-10).reverse().map((c: any) => (
+                <tr key={c.date}>
+                  <td>{c.date}</td>
+                  <td style={{ color: c.ticker_return >= 0 ? '#3fb950' : '#f85149' }}>
+                    {c.ticker_return >= 0 ? '+' : ''}{c.ticker_return}%
+                  </td>
+                  <td style={{ color: (c.benchmark_return ?? 0) >= 0 ? '#3fb950' : '#f85149' }}>
+                    {c.benchmark_return != null ? `${c.benchmark_return >= 0 ? '+' : ''}${c.benchmark_return}%` : '—'}
+                  </td>
+                  <td style={{ color: c.relative >= 0 ? '#3fb950' : '#f85149', fontWeight: 600 }}>
+                    {c.relative >= 0 ? '+' : ''}{c.relative}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className='card'>
         <h2>Alerts ({data.alerts.length})</h2>

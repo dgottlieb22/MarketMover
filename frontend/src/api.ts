@@ -36,6 +36,11 @@ export async function getTickerSignals(ticker: string) {
   return handleResponse(res)
 }
 
+export async function getBenchmark(ticker: string) {
+  const res = await fetch(`${BASE}/tickers/${ticker}/benchmark`)
+  return handleResponse(res)
+}
+
 export async function runBacktest(startDate: string, endDate: string) {
   const res = await fetch(`${BASE}/backtests`, {
     method: 'POST',
