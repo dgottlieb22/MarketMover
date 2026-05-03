@@ -98,17 +98,25 @@ export default function Dashboard() {
           ))}
         </div>
         {alerts.length === 0 && <p style={{ color: '#8b949e' }}>No alerts. Run the pipeline to generate alerts.</p>}
-        {alerts.map(a => (
+        {alerts.map(a => {
+          const date = a.timestamp.slice(0, 10)
+          const today = new Date().toISOString().slice(0, 10)
+          const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+          const recency = date === today ? 'today' : date === yesterday ? 'yesterday' : date
+          const isRecent = date === today || date === yesterday
+          return (
           <div key={a.id} className='alert-item'>
             <div className='alert-header'>
               <span className={`badge ${a.severity}`}>{a.severity}</span>
               <Link to={`/ticker/${a.ticker}`} className='ticker-link'>{a.ticker}</Link>
               <span className='score'>score={a.score.toFixed(1)}</span>
               <span className='signal-type'>{a.signal_type}</span>
+              <span className={`alert-date${isRecent ? ' recent' : ''}`}>{recency}</span>
             </div>
             <div className='explanation'>{a.explanation}</div>
           </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
