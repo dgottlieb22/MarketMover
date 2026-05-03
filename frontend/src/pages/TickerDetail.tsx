@@ -2,6 +2,54 @@ import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { getTickerSignals } from '../api'
 
+function PriceChart({ bars, alertDates }: { bars: any[]; alertDates: Set<string> }) {
+  const W = 900, H = 200, PAD = 40
+  const closes = bars.map((b: any) => b.close)
+  const min = Math.min(...closes), max = Math.max(...closes)
+  const range = max - min || 1
+  const xStep = (W - PAD * 2) / (bars.length - 1)
+
+  const points = closes.map((c: number, i: number) => {
+    const x = PAD + i * xStep
+    const y = H - PAD - ((c - min) / range) * (H - PAD * 2)
+    return { x, y, bar: bars[i] }
+  })
+
+  const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ')
+
+  return (
+    <div className='card'>
+      <h2>Price Chart</h2>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto' }}>
+        {/* grid lines */}
+        {[0, 0.25, 0.5, 0.75, 1].map(pct => {
+          const y = H - PAD - pct * (H - PAD * 2)
+          const val = min + pct * range
+          return <g key={pct}>
+            <line x1={PAD} y1={y} x2={W - PAD} y2={y} stroke='#2d333b' strokeWidth={0.5} />
+            <text x={PAD - 4} y={y + 3} textAnchor='end' fill='#6e7681' fontSize={9}>${val.toFixed(0)}</text>
+          </g>
+        })}
+        {/* price line */}
+        <path d={line} fill='none' stroke='#58a6ff' strokeWidth={1.5} />
+        {/* alert markers */}
+        {points.filter(p => alertDates.has(p.bar.timestamp.slice(0, 10))).map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r={4} fill='#da3633' stroke='#0f1117' strokeWidth={1.5} />
+        ))}
+        {/* x-axis labels */}
+        {points.filter((_, i) => i % Math.ceil(bars.length / 6) === 0).map((p, i) => (
+          <text key={i} x={p.x} y={H - 8} textAnchor='middle' fill='#6e7681' fontSize={9}>
+            {p.bar.timestamp.slice(5, 10)}
+          </text>
+        ))}
+      </svg>
+      <div style={{ fontSize: '0.75rem', color: '#6e7681', marginTop: '0.25rem' }}>
+        <span style={{ color: '#da3633' }}>●</span> = alert triggered
+      </div>
+    </div>
+  )
+}
+
 export default function TickerDetail() {
   const { ticker } = useParams<{ ticker: string }>()
   const [data, setData] = useState<any>(null)
@@ -12,10 +60,16 @@ export default function TickerDetail() {
 
   if (!data) return <p>Loading...</p>
 
+  // Bars are newest-first from API; reverse for chronological charts
+  const bars = [...data.bars].reverse()
+  const alertDates = new Set<string>(data.alerts.map((a: any) => a.timestamp.slice(0, 10)))
+
   return (
     <div>
       <Link to='/' className='back-link'>← Back to Dashboard</Link>
       <h1>{ticker} Signals</h1>
+
+      {bars.length > 1 && <PriceChart bars={bars} alertDates={alertDates} />}
 
       <div className='card'>
         <h2>Alerts ({data.alerts.length})</h2>
