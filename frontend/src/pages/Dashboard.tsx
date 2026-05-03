@@ -20,13 +20,14 @@ export default function Dashboard() {
   const [runResult, setRunResult] = useState<any>(null)
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [filter, setFilter] = useState<string | null>(null)
+  const [limit, setLimit] = useState(25)
 
   const loadAlerts = async () => {
-    const data = await getAlerts(filter ?? undefined)
+    const data = await getAlerts(filter ?? undefined, limit)
     setAlerts(data)
   }
 
-  useEffect(() => { loadAlerts() }, [filter])
+  useEffect(() => { loadAlerts() }, [filter, limit])
 
   const handleRun = async () => {
     setRunning(true)
@@ -94,6 +95,16 @@ export default function Dashboard() {
               onClick={() => setFilter(s)}
             >
               {s ?? 'All'}
+            </button>
+          ))}
+          <span style={{ borderLeft: '1px solid #2d333b', margin: '0 0.25rem' }} />
+          {[10, 25, 50, 100].map(n => (
+            <button
+              key={n}
+              className={`filter-btn ${limit === n ? 'active' : ''}`}
+              onClick={() => setLimit(n)}
+            >
+              {n}
             </button>
           ))}
         </div>
