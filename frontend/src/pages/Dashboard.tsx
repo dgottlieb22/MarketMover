@@ -53,6 +53,20 @@ export default function Dashboard() {
     }
   }
 
+  const exportCsv = () => {
+    const header = 'Ticker,Date,Severity,Score,Signal Type,Explanation'
+    const rows = alerts.map(a =>
+      `${a.ticker},${a.timestamp.slice(0, 10)},${a.severity},${a.score},"${a.signal_type}","${a.explanation.replace(/"/g, '""')}"`
+    )
+    const blob = new Blob([header + '\n' + rows.join('\n')], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `alerts-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div>
       <h1>Market Movement Detector</h1>
@@ -129,6 +143,10 @@ export default function Dashboard() {
               {limit === n ? `Show ${n}` : n}
             </button>
           ))}
+          {alerts.length > 0 && <>
+            <span style={{ borderLeft: '1px solid #2d333b', margin: '0 0.25rem' }} />
+            <button className='filter-btn' onClick={exportCsv}>Export CSV</button>
+          </>}
         </div>
         {alerts.length === 0 && <p style={{ color: '#8b949e' }}>No alerts. Run the pipeline to generate alerts.</p>}
         {(() => {
