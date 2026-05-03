@@ -45,6 +45,19 @@ export default function Dashboard() {
   const setTune = (k: string, v: number) => setTuning(t => ({ ...t, [k]: v }))
   const [search, setSearch] = useState('')
   const [suggestions, setSuggestions] = useState<string[]>([])
+  const [autoRefresh, setAutoRefresh] = useState(false)
+  const [nextRun, setNextRun] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!autoRefresh) { setNextRun(null); return }
+    const INTERVAL = 5 * 60 * 1000 // 5 minutes
+    setNextRun(Date.now() + INTERVAL)
+    const id = setInterval(() => {
+      handleRun()
+      setNextRun(Date.now() + INTERVAL)
+    }, INTERVAL)
+    return () => clearInterval(id)
+  }, [autoRefresh]) // eslint-disable-line
 
   useEffect(() => {
     if (search.length >= 1) {
@@ -162,6 +175,12 @@ export default function Dashboard() {
           </select>
           <button onClick={handleRun} disabled={running}>
             {running ? 'Running...' : 'Run Pipeline'}
+          </button>
+          <button
+            className={`filter-btn ${autoRefresh ? 'active' : ''}`}
+            onClick={() => setAutoRefresh(!autoRefresh)}
+          >
+            {autoRefresh ? '⏸ Stop Auto-Refresh' : '🔄 Auto-Refresh (5m)'}
           </button>
           <button className='filter-btn' onClick={() => setShowTuning(!showTuning)}>
             {showTuning ? 'Hide Tuning' : 'Tuning ⚙'}
