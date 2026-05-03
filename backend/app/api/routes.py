@@ -51,6 +51,30 @@ def get_ticker_signals(ticker: str, session: Session = Depends(get_session_dep))
     }
 
 
+COMMON_TICKERS = [
+    "AAPL","MSFT","GOOGL","AMZN","NVDA","META","TSLA","AMD","CRM","ORCL",
+    "ADBE","QCOM","AVGO","INTC","MU","AMAT","NFLX","SNPS","CDNS","TXN",
+    "GME","AMC","PLTR","SOFI","HOOD","COIN","MARA","RIOT","LCID","RIVN",
+    "SQ","PYPL","AFRM","NU","MELI","GRAB","SE","SHOP","DDOG","SNOW",
+    "CRWD","PANW","ZS","FTNT","NET","OKTA","CYBR","TENB","QLYS","S",
+    "LRCX","KLAC","MRVL","ON","ADI","NXPI","MCHP","ARM","SMCI","VRT",
+    "AI","MDB","PATH","DELL","IONQ","RGTI","BABA","JD","PDD","NIO",
+    "BA","CAT","DE","GE","HON","LMT","RTX","UNP","UPS","FDX",
+    "JPM","GS","MS","BAC","WFC","C","BLK","SCHW","AXP","V","MA",
+    "UNH","JNJ","PFE","MRK","ABBV","LLY","TMO","ABT","BMY","GILD",
+    "DIS","CMCSA","T","VZ","TMUS","ROKU","SPOT","RBLX","U","TTWO",
+    "XOM","CVX","COP","SLB","OXY","MPC","VLO","PSX","EOG","PXD",
+    "SPY","QQQ","IWM","DIA","SMH","XLF","XLE","XLK","ARKK","SOXX",
+]
+
+
+@router.get("/tickers/search")
+def search_tickers(q: str = Query(default="", min_length=1)):
+    q = q.upper()
+    matches = [t for t in COMMON_TICKERS if t.startswith(q)]
+    return matches[:10]
+
+
 @router.post("/run")
 def run_pipeline(request: dict):
     settings = get_settings()

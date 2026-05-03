@@ -8,6 +8,12 @@ async function handleResponse(res: Response) {
   return res.json()
 }
 
+export async function searchTickers(q: string): Promise<string[]> {
+  if (!q) return []
+  const res = await fetch(`${BASE}/tickers/search?q=${encodeURIComponent(q)}`)
+  return handleResponse(res)
+}
+
 export async function runPipeline(tickers: string, days: number, provider: string, overrides?: Record<string, number>) {
   const res = await fetch(`${BASE}/run`, {
     method: 'POST',

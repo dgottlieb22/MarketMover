@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { runPipeline, getAlerts } from '../api'
+import { runPipeline, getAlerts, searchTickers } from '../api'
 
 interface Alert {
   id: string
@@ -43,6 +43,25 @@ export default function Dashboard() {
     combined_volume_threshold: 2.0,
   })
   const setTune = (k: string, v: number) => setTuning(t => ({ ...t, [k]: v }))
+  const [search, setSearch] = useState('')
+  const [suggestions, setSuggestions] = useState<string[]>([])
+
+  useEffect(() => {
+    if (search.length >= 1) {
+      searchTickers(search).then(setSuggestions)
+    } else {
+      setSuggestions([])
+    }
+  }, [search])
+
+  const addTicker = (t: string) => {
+    const list = tickers.split(',').map(s => s.trim()).filter(Boolean)
+    if (!list.includes(t)) {
+      setTickers([...list, t].join(','))
+    }
+    setSearch('')
+    setSuggestions([])
+  }
 
   const loadAlerts = async () => {
     const data = await getAlerts(filter ?? undefined, limit)
@@ -93,6 +112,29 @@ export default function Dashboard() {
             style={{ width: '300px' }}
             placeholder='AAPL,TSLA,NVDA'
           />
+          <div style={{ position: 'relative' }}>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value.toUpperCase())}
+              placeholder='Add ticker...'
+              style={{ width: '120px' }}
+            />
+            {suggestions.length > 0 && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, background: '#161b22',
+                border: '1px solid #2d333b', borderRadius: '4px', zIndex: 10, width: '120px',
+              }}>
+                {suggestions.map(s => (
+                  <div key={s} onClick={() => addTicker(s)} style={{
+                    padding: '0.3rem 0.5rem', cursor: 'pointer', fontSize: '0.85rem',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#21262d')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >{s}</div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         <div className='form-row'>
           {Object.entries(PRESETS).map(([name, list]) => (
