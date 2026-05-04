@@ -382,7 +382,7 @@ def run_scan(request: dict):
 
             for i in range(0, total, CHUNK):
                 if i > 0:
-                    time.sleep(2)  # Rate limit protection
+                    time.sleep(30)  # Rate limit protection
                 chunk = tickers[i:i + CHUNK]
                 progress = min(i + CHUNK, total)
 
