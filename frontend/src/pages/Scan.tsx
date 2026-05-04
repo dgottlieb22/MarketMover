@@ -12,11 +12,13 @@ export default function Scan() {
   const [scanning, setScanning] = useState(false)
   const [progress, setProgress] = useState({ processed: 0, total: 0 })
   const [result, setResult] = useState<any>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const handleScreen = async () => {
     setScreening(true)
     setTickers([])
     setResult(null)
+    setError(null)
     setScreenProgress({ page: 0, total: 0 })
     try {
       const data = await screenTickers(
@@ -24,6 +26,8 @@ export default function Scan() {
         (page, total) => setScreenProgress({ page, total }),
       )
       setTickers(data.tickers)
+    } catch (e: any) {
+      setError(e.message)
     } finally {
       setScreening(false)
     }
@@ -32,12 +36,15 @@ export default function Scan() {
   const handleScan = async () => {
     setScanning(true)
     setResult(null)
+    setError(null)
     setProgress({ processed: 0, total: tickers.length })
     try {
       const data = await runScan(tickers, 120, (p) => {
         setProgress({ processed: p.processed, total: p.total })
       })
       setResult(data)
+    } catch (e: any) {
+      setError(e.message)
     } finally {
       setScanning(false)
     }
@@ -137,6 +144,8 @@ export default function Scan() {
           )}
         </div>
       )}
+
+      {error && <div className='card'><div className='status error'>❌ {error}</div></div>}
 
       {result && (
         <div className='card'>

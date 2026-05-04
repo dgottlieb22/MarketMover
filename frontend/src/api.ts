@@ -73,6 +73,7 @@ export async function screenTickers(
     for (const line of lines) {
       if (!line.trim()) continue
       const data = JSON.parse(line)
+      if (data.type === 'error') throw new Error(data.message)
       if (data.type === 'progress' && onProgress) onProgress(data.page, data.total_pages)
       if (data.type === 'done') result = { count: data.count, tickers: data.tickers }
     }
@@ -104,6 +105,7 @@ export async function runScan(
     for (const line of lines) {
       if (!line.trim()) continue
       const data = JSON.parse(line)
+      if (data.type === 'error') throw new Error(data.message)
       if (data.type === 'progress') onProgress(data)
       if (data.type === 'done') result = data
     }

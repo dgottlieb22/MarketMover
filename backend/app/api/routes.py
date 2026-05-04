@@ -251,6 +251,10 @@ def _bar_to_dict(b: MarketBar) -> dict:
 
 # --- Market Scan ---
 
+import threading
+
+_scan_lock = threading.Lock()
+
 FINVIZ_PRICE_OPTIONS = {
     "any": "", "over1": "Over $1", "over5": "Over $5", "over10": "Over $10",
     "over20": "Over $20", "over50": "Over $50",
@@ -269,10 +273,16 @@ FINVIZ_MCAP_OPTIONS = {
 @router.post("/scan/screen")
 def screen_tickers(request: dict):
     """Use Finviz screener to get a list of tickers matching filters, streaming page progress."""
+    if not _scan_lock.acquire(blocking=False):
+        return StreamingResponse(
+            iter([json.dumps({"type": "error", "message": "A scan is already in progress. Please wait."}) + "\n"]),
+            media_type="application/x-ndjson", status_code=429,
+        )
+
     import io
     import re
     import sys
-    import threading
+    import threading as _threading
     from finvizfinance.screener.overview import Overview
 
     filters: dict[str, str] = {}
@@ -299,28 +309,29 @@ def screen_tickers(request: dict):
         result["tickers"] = tickers
 
     def generate():
-        # Capture stderr to read finviz progress
-        old_stderr = sys.stderr
-        sys.stderr = captured
+        try:
+            old_stderr = sys.stderr
+            sys.stderr = captured
 
-        t = threading.Thread(target=run_screener)
-        t.start()
+            t = _threading.Thread(target=run_screener)
+            t.start()
 
-        last_sent = ""
-        while t.is_alive():
-            t.join(timeout=0.5)
-            val = captured.getvalue()
-            if val != last_sent:
-                last_sent = val
-                m = progress_pattern.findall(val)
-                if m:
-                    current, total = m[-1]
-                    yield json.dumps({"type": "progress", "page": int(current), "total_pages": int(total)}) + "\n"
+            last_sent = ""
+            while t.is_alive():
+                t.join(timeout=0.5)
+                val = captured.getvalue()
+                if val != last_sent:
+                    last_sent = val
+                    m = progress_pattern.findall(val)
+                    if m:
+                        current, total = m[-1]
+                        yield json.dumps({"type": "progress", "page": int(current), "total_pages": int(total)}) + "\n"
 
-        sys.stderr = old_stderr
-
-        tickers = result.get("tickers", [])
-        yield json.dumps({"type": "done", "count": len(tickers), "tickers": tickers}) + "\n"
+            sys.stderr = old_stderr
+            tickers = result.get("tickers", [])
+            yield json.dumps({"type": "done", "count": len(tickers), "tickers": tickers}) + "\n"
+        finally:
+            _scan_lock.release()
 
     return StreamingResponse(generate(), media_type="application/x-ndjson")
 
@@ -328,6 +339,11 @@ def screen_tickers(request: dict):
 @router.post("/scan/run")
 def run_scan(request: dict):
     """Run the full pipeline on screened tickers, streaming progress as JSON lines."""
+    if not _scan_lock.acquire(blocking=False):
+        return StreamingResponse(
+            iter([json.dumps({"type": "error", "message": "A scan is already in progress. Please wait."}) + "\n"]),
+            media_type="application/x-ndjson", status_code=429,
+        )
     tickers = request.get("tickers", [])
     days = request.get("days", 120)
 
@@ -335,68 +351,67 @@ def run_scan(request: dict):
         return {"error": "No tickers provided"}
 
     def generate():
-        settings = get_settings()
-        for key in ['price_zscore_threshold', 'volume_ratio_threshold',
-                     'combined_zscore_threshold', 'combined_volume_threshold']:
-            if key in request:
-                setattr(settings, key, float(request[key]))
+        try:
+            settings = get_settings()
+            for key in ['price_zscore_threshold', 'volume_ratio_threshold',
+                         'combined_zscore_threshold', 'combined_volume_threshold']:
+                if key in request:
+                    setattr(settings, key, float(request[key]))
 
-        engine = get_engine(settings.database_url)
-        init_db(engine)
-        factory = get_session_factory(engine)
+            engine = get_engine(settings.database_url)
+            init_db(engine)
+            factory = get_session_factory(engine)
 
-        from app.ingestion.yahoo_provider import YahooFinanceProvider
-        provider = YahooFinanceProvider()
+            from app.ingestion.yahoo_provider import YahooFinanceProvider
+            provider = YahooFinanceProvider()
 
-        end = datetime.now()
-        start = end - timedelta(days=days)
+            end = datetime.now()
+            start = end - timedelta(days=days)
 
-        CHUNK = 50
-        total = len(tickers)
-        all_alerts = []
+            CHUNK = 50
+            total = len(tickers)
+            all_alerts = []
 
-        for i in range(0, total, CHUNK):
-            chunk = tickers[i:i + CHUNK]
-            progress = min(i + CHUNK, total)
+            for i in range(0, total, CHUNK):
+                chunk = tickers[i:i + CHUNK]
+                progress = min(i + CHUNK, total)
 
-            yield json.dumps({"type": "progress", "processed": progress, "total": total, "chunk": chunk}) + "\n"
+                yield json.dumps({"type": "progress", "processed": progress, "total": total, "chunk": chunk}) + "\n"
 
-            # Clear old data for this chunk
-            with factory() as session:
-                for model in [MovementAlert, MarketFeature, MarketBar]:
-                    session.query(model).filter(model.ticker.in_(chunk)).delete(synchronize_session=False)
-                session.commit()
+                with factory() as session:
+                    for model in [MovementAlert, MarketFeature, MarketBar]:
+                        session.query(model).filter(model.ticker.in_(chunk)).delete(synchronize_session=False)
+                    session.commit()
 
-            # Ingest
-            svc = IngestionService(factory, provider)
-            svc.ingest(chunk, start, end)
+                svc = IngestionService(factory, provider)
+                svc.ingest(chunk, start, end)
 
-            # Features + Detection
-            feat_svc = FeatureService(factory, settings)
-            det = DetectionEngine(factory, settings)
-            for t in chunk:
-                feat_svc.compute_features(t)
-                chunk_alerts = det.detect(t)
-                all_alerts.extend(chunk_alerts)
+                feat_svc = FeatureService(factory, settings)
+                det = DetectionEngine(factory, settings)
+                for t in chunk:
+                    feat_svc.compute_features(t)
+                    chunk_alerts = det.detect(t)
+                    all_alerts.extend(chunk_alerts)
 
-        # Final result — only tickers that triggered alerts
-        alert_data = []
-        seen = set()
-        for a in sorted(all_alerts, key=lambda x: x.score, reverse=True):
-            key = f"{a.ticker}:{a.timestamp.date()}"
-            if key not in seen:
-                seen.add(key)
-                alert_data.append({
-                    "ticker": a.ticker, "date": str(a.timestamp.date()),
-                    "severity": a.severity, "score": a.score,
-                    "signal_type": a.signal_type, "explanation": a.explanation,
-                })
+            alert_data = []
+            seen = set()
+            for a in sorted(all_alerts, key=lambda x: x.score, reverse=True):
+                key = f"{a.ticker}:{a.timestamp.date()}"
+                if key not in seen:
+                    seen.add(key)
+                    alert_data.append({
+                        "ticker": a.ticker, "date": str(a.timestamp.date()),
+                        "severity": a.severity, "score": a.score,
+                        "signal_type": a.signal_type, "explanation": a.explanation,
+                    })
 
-        yield json.dumps({
-            "type": "done",
-            "total_scanned": total,
-            "alerts_found": len(alert_data),
-            "alerts": alert_data[:100],
-        }) + "\n"
+            yield json.dumps({
+                "type": "done",
+                "total_scanned": total,
+                "alerts_found": len(alert_data),
+                "alerts": alert_data[:100],
+            }) + "\n"
+        finally:
+            _scan_lock.release()
 
     return StreamingResponse(generate(), media_type="application/x-ndjson")
