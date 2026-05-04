@@ -49,3 +49,43 @@ export async function runBacktest(startDate: string, endDate: string) {
   })
   return handleResponse(res)
 }
+
+export async function screenTickers(filters: Record<string, string>) {
+  const res = await fetch(`${BASE}/scan/screen`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(filters),
+  })
+  return handleResponse(res)
+}
+
+export async function runScan(
+  tickers: string[],
+  days: number,
+  onProgress: (data: any) => void,
+): Promise<any> {
+  const res = await fetch(`${BASE}/scan/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tickers, days }),
+  })
+  const reader = res.body?.getReader()
+  const decoder = new TextDecoder()
+  let result = null
+  if (!reader) throw new Error('No response body')
+  let buffer = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) {
+      if (!line.trim()) continue
+      const data = JSON.parse(line)
+      if (data.type === 'progress') onProgress(data)
+      if (data.type === 'done') result = data
+    }
+  }
+  return result
+}

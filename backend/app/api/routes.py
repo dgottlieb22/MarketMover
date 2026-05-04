@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.backtesting.service import BacktestService
@@ -246,3 +247,121 @@ def _bar_to_dict(b: MarketBar) -> dict:
         "volume": b.volume,
         "vwap": b.vwap,
     }
+
+
+# --- Market Scan ---
+
+FINVIZ_PRICE_OPTIONS = {
+    "any": "", "over1": "Over $1", "over5": "Over $5", "over10": "Over $10",
+    "over20": "Over $20", "over50": "Over $50",
+}
+FINVIZ_VOLUME_OPTIONS = {
+    "any": "", "over100k": "Over 100K", "over500k": "Over 500K",
+    "over1m": "Over 1M", "over5m": "Over 5M",
+}
+FINVIZ_MCAP_OPTIONS = {
+    "any": "", "small": "Small ($300mln to $2bln)", "mid": "Mid ($2bln to $10bln)",
+    "large": "Large ($10bln to $200bln)", "mega": "Mega ($200bln and more)",
+    "small+": "+Small (over $300mln)", "mid+": "+Mid (over $2bln)",
+}
+
+
+@router.post("/scan/screen")
+def screen_tickers(request: dict):
+    """Use Finviz screener to get a list of tickers matching filters."""
+    from finvizfinance.screener.overview import Overview
+
+    filters: dict[str, str] = {}
+    price = FINVIZ_PRICE_OPTIONS.get(request.get("price", "over10"), "")
+    volume = FINVIZ_VOLUME_OPTIONS.get(request.get("volume", "over500k"), "")
+    mcap = FINVIZ_MCAP_OPTIONS.get(request.get("market_cap", "any"), "")
+    if price:
+        filters["Price"] = price
+    if volume:
+        filters["Average Volume"] = volume
+    if mcap:
+        filters["Market Cap."] = mcap
+
+    foverview = Overview()
+    if filters:
+        foverview.set_filter(filters_dict=filters)
+    df = foverview.screener_view()
+    tickers = df["Ticker"].tolist() if df is not None and len(df) > 0 else []
+    return {"count": len(tickers), "tickers": tickers}
+
+
+@router.post("/scan/run")
+def run_scan(request: dict):
+    """Run the full pipeline on screened tickers, streaming progress as JSON lines."""
+    tickers = request.get("tickers", [])
+    days = request.get("days", 120)
+
+    if not tickers:
+        return {"error": "No tickers provided"}
+
+    def generate():
+        settings = get_settings()
+        for key in ['price_zscore_threshold', 'volume_ratio_threshold',
+                     'combined_zscore_threshold', 'combined_volume_threshold']:
+            if key in request:
+                setattr(settings, key, float(request[key]))
+
+        engine = get_engine(settings.database_url)
+        init_db(engine)
+        factory = get_session_factory(engine)
+
+        from app.ingestion.yahoo_provider import YahooFinanceProvider
+        provider = YahooFinanceProvider()
+
+        end = datetime.now()
+        start = end - timedelta(days=days)
+
+        CHUNK = 50
+        total = len(tickers)
+        all_alerts = []
+
+        for i in range(0, total, CHUNK):
+            chunk = tickers[i:i + CHUNK]
+            progress = min(i + CHUNK, total)
+
+            yield json.dumps({"type": "progress", "processed": progress, "total": total, "chunk": chunk}) + "\n"
+
+            # Clear old data for this chunk
+            with factory() as session:
+                for model in [MovementAlert, MarketFeature, MarketBar]:
+                    session.query(model).filter(model.ticker.in_(chunk)).delete(synchronize_session=False)
+                session.commit()
+
+            # Ingest
+            svc = IngestionService(factory, provider)
+            svc.ingest(chunk, start, end)
+
+            # Features + Detection
+            feat_svc = FeatureService(factory, settings)
+            det = DetectionEngine(factory, settings)
+            for t in chunk:
+                feat_svc.compute_features(t)
+                chunk_alerts = det.detect(t)
+                all_alerts.extend(chunk_alerts)
+
+        # Final result — only tickers that triggered alerts
+        alert_data = []
+        seen = set()
+        for a in sorted(all_alerts, key=lambda x: x.score, reverse=True):
+            key = f"{a.ticker}:{a.timestamp.date()}"
+            if key not in seen:
+                seen.add(key)
+                alert_data.append({
+                    "ticker": a.ticker, "date": str(a.timestamp.date()),
+                    "severity": a.severity, "score": a.score,
+                    "signal_type": a.signal_type, "explanation": a.explanation,
+                })
+
+        yield json.dumps({
+            "type": "done",
+            "total_scanned": total,
+            "alerts_found": len(alert_data),
+            "alerts": alert_data[:100],
+        }) + "\n"
+
+    return StreamingResponse(generate(), media_type="application/x-ndjson")
