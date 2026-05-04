@@ -375,11 +375,14 @@ def run_scan(request: dict):
             end = datetime.now()
             start = end - timedelta(days=days)
 
-            CHUNK = 50
+            import time
+            CHUNK = 200
             total = len(tickers)
             all_alerts = []
 
             for i in range(0, total, CHUNK):
+                if i > 0:
+                    time.sleep(2)  # Rate limit protection
                 chunk = tickers[i:i + CHUNK]
                 progress = min(i + CHUNK, total)
 

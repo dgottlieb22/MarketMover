@@ -14,16 +14,22 @@ class YahooFinanceProvider(MarketDataProvider):
         self, tickers: list[str], start_time: datetime, end_time: datetime, interval: str
     ) -> dict[str, list[Bar]]:
         yf_interval = {"1d": "1d", "5m": "5m", "15m": "15m", "1h": "1h"}.get(interval, "1d")
-        df = yf.download(
-            " ".join(tickers),
-            start=start_time.strftime("%Y-%m-%d"),
-            end=end_time.strftime("%Y-%m-%d"),
-            interval=yf_interval,
-            progress=False,
-            auto_adjust=True,
-            group_by="ticker" if len(tickers) > 1 else "column",
-        )
-        if df.empty:
+        try:
+            df = yf.download(
+                " ".join(tickers),
+                start=start_time.strftime("%Y-%m-%d"),
+                end=end_time.strftime("%Y-%m-%d"),
+                interval=yf_interval,
+                progress=False,
+                auto_adjust=True,
+                group_by="ticker" if len(tickers) > 1 else "column",
+                threads=False,
+                timeout=30,
+            )
+        except Exception:
+            return {t: [] for t in tickers}
+
+        if df is None or df.empty:
             return {t: [] for t in tickers}
 
         result: dict[str, list[Bar]] = {}
@@ -32,7 +38,6 @@ class YahooFinanceProvider(MarketDataProvider):
                 if len(tickers) > 1:
                     tdf = df[ticker].dropna(subset=["Close"])
                 else:
-                    # Single ticker: flatten MultiIndex if present
                     tdf = df
                     if hasattr(tdf.columns, "levels") and len(tdf.columns.levels) > 1:
                         tdf.columns = tdf.columns.droplevel("Ticker")
