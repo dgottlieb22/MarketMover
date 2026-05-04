@@ -349,7 +349,7 @@ def run_scan(request: dict):
             media_type="application/x-ndjson", status_code=429,
         )
     tickers = request.get("tickers", [])
-    days = request.get("days", 120)
+    days = request.get("days", 80)
 
     if not tickers:
         return {"error": "No tickers provided"}
