@@ -78,6 +78,12 @@ export default function Scan() {
             {screening ? 'Screening...' : 'Screen'}
           </button>
         </div>
+        {screening && (
+          <div className='status loading'>
+            Screening Finviz for matching tickers... this may take 30-60 seconds depending on filters.
+            <div className='spinner' />
+          </div>
+        )}
         {tickers.length > 0 && (
           <div className='status success'>
             Found {tickers.length} tickers matching filters
