@@ -122,7 +122,7 @@ export default function Scan() {
         <div className='card'>
           <h2>2. Run Detection</h2>
           <p style={{ color: '#8b949e', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
-            Scan {tickers.length} tickers for unusual movement (processes in batches of 50)
+            Scan {tickers.length} tickers for unusual movement (batches of 200, 30s delay between batches)
           </p>
           <button onClick={handleScan} disabled={scanning}>
             {scanning ? `Scanning... ${pct}%` : `Scan ${tickers.length} Tickers`}
