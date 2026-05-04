@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     severity_low: float = 50.0
     severity_medium: float = 70.0
     severity_high: float = 85.0
+    data_retention_days: int = 3
 
     model_config = {"env_prefix": "MMD_"}
 

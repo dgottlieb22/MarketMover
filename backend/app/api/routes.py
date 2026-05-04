@@ -144,6 +144,10 @@ def run_pipeline(request: dict):
     init_db(engine)
     factory = get_session_factory(engine)
 
+    # Purge stale data
+    from app.db.cleanup import purge_old_data
+    purge_old_data(factory, settings.data_retention_days)
+
     tickers = [t.strip().upper() for t in request.get("tickers", "AAPL,TSLA,NVDA").split(",")]
     days = request.get("days", 120)
     provider_name = request.get("provider", "yahoo")
@@ -361,6 +365,9 @@ def run_scan(request: dict):
             engine = get_engine(settings.database_url)
             init_db(engine)
             factory = get_session_factory(engine)
+
+            from app.db.cleanup import purge_old_data
+            purge_old_data(factory, settings.data_retention_days)
 
             from app.ingestion.yahoo_provider import YahooFinanceProvider
             provider = YahooFinanceProvider()
