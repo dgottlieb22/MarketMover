@@ -310,8 +310,8 @@ def screen_tickers(request: dict):
 
     def generate():
         try:
-            old_stderr = sys.stderr
-            sys.stderr = captured
+            old_stdout = sys.stdout
+            sys.stdout = captured
 
             t = _threading.Thread(target=run_screener)
             t.start()
@@ -327,7 +327,7 @@ def screen_tickers(request: dict):
                         current, total = m[-1]
                         yield json.dumps({"type": "progress", "page": int(current), "total_pages": int(total)}) + "\n"
 
-            sys.stderr = old_stderr
+            sys.stdout = old_stdout
             tickers = result.get("tickers", [])
             yield json.dumps({"type": "done", "count": len(tickers), "tickers": tickers}) + "\n"
         finally:
