@@ -268,7 +268,11 @@ FINVIZ_MCAP_OPTIONS = {
 
 @router.post("/scan/screen")
 def screen_tickers(request: dict):
-    """Use Finviz screener to get a list of tickers matching filters."""
+    """Use Finviz screener to get a list of tickers matching filters, streaming page progress."""
+    import io
+    import re
+    import sys
+    import threading
     from finvizfinance.screener.overview import Overview
 
     filters: dict[str, str] = {}
@@ -282,12 +286,43 @@ def screen_tickers(request: dict):
     if mcap:
         filters["Market Cap."] = mcap
 
-    foverview = Overview()
-    if filters:
-        foverview.set_filter(filters_dict=filters)
-    df = foverview.screener_view()
-    tickers = df["Ticker"].tolist() if df is not None and len(df) > 0 else []
-    return {"count": len(tickers), "tickers": tickers}
+    result: dict = {}
+    progress_pattern = re.compile(r"(\d+)/(\d+)")
+    captured = io.StringIO()
+
+    def run_screener():
+        foverview = Overview()
+        if filters:
+            foverview.set_filter(filters_dict=filters)
+        df = foverview.screener_view()
+        tickers = df["Ticker"].tolist() if df is not None and len(df) > 0 else []
+        result["tickers"] = tickers
+
+    def generate():
+        # Capture stderr to read finviz progress
+        old_stderr = sys.stderr
+        sys.stderr = captured
+
+        t = threading.Thread(target=run_screener)
+        t.start()
+
+        last_sent = ""
+        while t.is_alive():
+            t.join(timeout=0.5)
+            val = captured.getvalue()
+            if val != last_sent:
+                last_sent = val
+                m = progress_pattern.findall(val)
+                if m:
+                    current, total = m[-1]
+                    yield json.dumps({"type": "progress", "page": int(current), "total_pages": int(total)}) + "\n"
+
+        sys.stderr = old_stderr
+
+        tickers = result.get("tickers", [])
+        yield json.dumps({"type": "done", "count": len(tickers), "tickers": tickers}) + "\n"
+
+    return StreamingResponse(generate(), media_type="application/x-ndjson")
 
 
 @router.post("/scan/run")

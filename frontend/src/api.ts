@@ -50,13 +50,34 @@ export async function runBacktest(startDate: string, endDate: string) {
   return handleResponse(res)
 }
 
-export async function screenTickers(filters: Record<string, string>) {
+export async function screenTickers(
+  filters: Record<string, string>,
+  onProgress?: (page: number, total: number) => void,
+): Promise<{ count: number; tickers: string[] }> {
   const res = await fetch(`${BASE}/scan/screen`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(filters),
   })
-  return handleResponse(res)
+  const reader = res.body?.getReader()
+  if (!reader) throw new Error('No response body')
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let result = { count: 0, tickers: [] as string[] }
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) {
+      if (!line.trim()) continue
+      const data = JSON.parse(line)
+      if (data.type === 'progress' && onProgress) onProgress(data.page, data.total_pages)
+      if (data.type === 'done') result = { count: data.count, tickers: data.tickers }
+    }
+  }
+  return result
 }
 
 export async function runScan(

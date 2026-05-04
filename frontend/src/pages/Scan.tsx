@@ -7,6 +7,7 @@ export default function Scan() {
   const [volume, setVolume] = useState('over500k')
   const [marketCap, setMarketCap] = useState('any')
   const [screening, setScreening] = useState(false)
+  const [screenProgress, setScreenProgress] = useState({ page: 0, total: 0 })
   const [tickers, setTickers] = useState<string[]>([])
   const [scanning, setScanning] = useState(false)
   const [progress, setProgress] = useState({ processed: 0, total: 0 })
@@ -16,8 +17,12 @@ export default function Scan() {
     setScreening(true)
     setTickers([])
     setResult(null)
+    setScreenProgress({ page: 0, total: 0 })
     try {
-      const data = await screenTickers({ price, volume, market_cap: marketCap })
+      const data = await screenTickers(
+        { price, volume, market_cap: marketCap },
+        (page, total) => setScreenProgress({ page, total }),
+      )
       setTickers(data.tickers)
     } finally {
       setScreening(false)
@@ -80,8 +85,23 @@ export default function Scan() {
         </div>
         {screening && (
           <div className='status loading'>
-            Screening Finviz for matching tickers... this may take 30-60 seconds depending on filters.
+            Screening Finviz{screenProgress.total > 0
+              ? ` — page ${screenProgress.page} / ${screenProgress.total}`
+              : '...'}
             <div className='spinner' />
+            {screenProgress.total > 0 && (
+              <div style={{ marginTop: '0.5rem' }}>
+                <div style={{
+                  background: '#21262d', borderRadius: '4px', height: '6px', overflow: 'hidden',
+                }}>
+                  <div style={{
+                    background: '#58a6ff', height: '100%',
+                    width: `${Math.round((screenProgress.page / screenProgress.total) * 100)}%`,
+                    transition: 'width 0.3s',
+                  }} />
+                </div>
+              </div>
+            )}
           </div>
         )}
         {tickers.length > 0 && (
